@@ -1,0 +1,62 @@
+name: Episteme-Bench CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_live_smoke:
+        description: "Run live Gemini API smoke eval (1 temp, 1 seed)"
+        required: false
+        default: "false"
+        type: boolean
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Run unit and mocked tests
+        env:
+          PYTHONPATH: src
+        run: pytest -v
+
+  live-smoke-gate:
+    needs: unit-tests
+    if: github.event_name == 'workflow_dispatch' && inputs.run_live_smoke == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run live smoke sweep and scoring
+        env:
+          PYTHONPATH: src
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python src/runner.py --smoke --delay 4.0
+          python src/scoring.py --delay 4.0
+
